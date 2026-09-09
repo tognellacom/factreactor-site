@@ -62,10 +62,25 @@ URL_RE = re.compile(r"https?://[^\s<>\"']+")
 # feed
 # --------------------------------------------------------------------------
 
+def custom_domain() -> str:
+    """The hostname from a root CNAME file, if the repo has one."""
+    path = ROOT / "CNAME"
+    if not path.exists():
+        return ""
+    for line in path.read_text(encoding="utf-8").splitlines():
+        host = line.strip()
+        if host and not host.startswith("#"):
+            return host
+    return ""
+
+
 def base_url() -> str:
     explicit = os.environ.get("BASE_URL", "").strip().rstrip("/")
     if explicit:
         return explicit
+    domain = custom_domain()
+    if domain:
+        return f"https://{domain}"
     repo = os.environ.get("GITHUB_REPOSITORY", "").strip()
     if "/" in repo:
         owner, name = repo.split("/", 1)
@@ -598,6 +613,13 @@ def main() -> int:
         (page / "index.html").write_text(render_video(video, root), encoding="utf-8")
 
     (OUT / ".nojekyll").write_text("", encoding="utf-8")
+
+    # The custom domain must travel inside the artifact. With Actions-based
+    # Pages deployment nothing else carries it, so a CNAME left only in the
+    # repo root gets dropped and the domain falls back to github.io.
+    domain = custom_domain()
+    if domain:
+        (OUT / "CNAME").write_text(domain + "\n", encoding="utf-8")
     if root:
         (OUT / "sitemap.xml").write_text(render_sitemap(videos, root), encoding="utf-8")
         (OUT / "robots.txt").write_text(
