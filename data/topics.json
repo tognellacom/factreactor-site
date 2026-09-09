@@ -1,11 +1,19 @@
 {
   "_comment": "Ordnet Videos einem Thema zu. Schlüssel ist die YouTube-Video-ID, Wert das Thema. Videos ohne Eintrag erscheinen nur unter 'Alle'. Eine Zeile pro neuem Video — sonst ist nichts zu pflegen.",
+
   "Cq_9nkzjES8": "Physics",
   "FTGhQcpG_RA": "Physics",
+  "J2uuDDU1j1Y": "Physics",
+
   "jtcVdlnVrkc": "Psychology",
   "grbzcXjIBSw": "Psychology",
   "fI5VJxcCe84": "Psychology",
-  "rvRDVWm8y4Q": "History",
+
   "cbUPlcHJSFs": "Anatomy",
-  "TEipugAb-GE": "Anatomy"
+  "TEipugAb-GE": "Anatomy",
+  "mkOl6-Zz3OM": "Anatomy",
+
+  "vWOyopyRX9c": "Chemistry",
+
+  "rvRDVWm8y4Q": "History"
 }
