@@ -1,0 +1,14 @@
+{
+  "_comment": "Impressumsangaben. Die Seite /impressum/ wird NUR gebaut und verlinkt, wenn 'operator' ausgefüllt ist und zusätzlich 'email' oder 'address'. Solange etwas fehlt, warnt der Build und lässt die Seite weg — ein Impressum mit Lücken ist schlechter als keines. Alles hier wird öffentlich und von Suchmaschinen indexiert.",
+
+  "operator": "",
+  "address": [
+    "",
+    ""
+  ],
+  "email": "",
+
+  "_optional": "Die beiden folgenden Felder erscheinen nur, wenn sie gefüllt sind.",
+  "vat": "",
+  "register": ""
+}

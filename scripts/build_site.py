@@ -38,16 +38,21 @@ SITE_DESCRIPTION = (
     "Every claim checked against the original research."
 )
 CHANNEL_URL = f"https://www.youtube.com/channel/{CHANNEL_ID}"
+
+# Google AdSense. Empty string disables the tag everywhere.
+ADSENSE_CLIENT = "ca-pub-5873583387305949"
 SOCIAL = [
     ("YouTube", CHANNEL_URL),
     ("TikTok", "https://www.tiktok.com/@factreactor_hq"),
     ("Instagram", "https://www.instagram.com/factreactor_hq"),
+    ("Facebook", "https://www.facebook.com/1375562482297804"),
 ]
 
 ROOT = Path(__file__).resolve().parent.parent
 OUT = ROOT / "_site"
 STATE_PATH = ROOT / "data" / "videos.json"
 TOPICS_PATH = ROOT / "data" / "topics.json"
+IMPRINT_PATH = ROOT / "data" / "imprint.json"
 
 NS = {
     "atom": "http://www.w3.org/2005/Atom",
@@ -207,6 +212,27 @@ def load_topics() -> dict:
     }
 
 
+def load_imprint() -> dict:
+    if not IMPRINT_PATH.exists():
+        return {}
+    try:
+        raw = json.loads(IMPRINT_PATH.read_text(encoding="utf-8"))
+    except (json.JSONDecodeError, OSError) as exc:
+        print(f"warning: could not read {IMPRINT_PATH}: {exc}", file=sys.stderr)
+        return {}
+    return {k: v for k, v in raw.items() if not k.startswith("_")}
+
+
+def imprint_is_complete() -> bool:
+    """A legal notice with blanks in it is worse than none, so the page is only
+    rendered and linked once the operator and a contact are actually filled in."""
+    data = load_imprint()
+    lines = [l for l in data.get("address", []) if str(l).strip()]
+    return bool(str(data.get("operator", "")).strip()) and bool(
+        str(data.get("email", "")).strip() or lines
+    )
+
+
 def ordered(state: dict, topics: dict) -> list[dict]:
     items = []
     for vid, rec in state["videos"].items():
@@ -354,6 +380,12 @@ main.video { padding-bottom: 64px; }
 main.video h1 { font-size: clamp(24px, 4vw, 34px); line-height: 1.2; margin: 0 0 10px; }
 .meta { color: var(--muted); font-size: 14px; margin-bottom: 26px; }
 .body-copy p { margin: 0 0 18px; overflow-wrap: anywhere; }
+main.video h2 { font-size: 18px; margin: 32px 0 8px; color: var(--gold); }
+main.video p { margin: 0 0 14px; overflow-wrap: anywhere; }
+main.video code {
+  background: var(--surface); border: 1px solid var(--line);
+  border-radius: 5px; padding: 1px 5px; font-size: 13px;
+}
 .watch {
   display: inline-block; margin: 6px 0 34px; padding: 12px 22px; border-radius: 999px;
   background: var(--gold); color: #14100a; font-weight: 700; text-decoration: none;
@@ -388,18 +420,30 @@ def head(title: str, description: str, canonical: str, image: str, og_type: str)
     if canonical:
         tags.append(f'<link rel="canonical" href="{html.escape(canonical, quote=True)}">')
         tags.append(f'<meta property="og:url" content="{html.escape(canonical, quote=True)}">')
+    if ADSENSE_CLIENT:
+        tags.append(
+            '<script async src="https://pagead2.googlesyndication.com/pagead/js/'
+            f'adsbygoogle.js?client={html.escape(ADSENSE_CLIENT, quote=True)}"'
+            ' crossorigin="anonymous"></script>'
+        )
     tags.append(f"<style>{CSS}</style>")
     return "\n".join(tags)
 
 
-def footer() -> str:
+def footer(prefix: str = "") -> str:
+    """prefix walks back up to the site root: "" at the root, "../../" one
+    level down under /v/<slug>/."""
     links = " · ".join(
         f'<a href="{html.escape(url, quote=True)}" rel="noopener" target="_blank">{name}</a>'
         for name, url in SOCIAL
     )
+    legal = (
+        f'<a href="{prefix}impressum/">Impressum</a>' if imprint_is_complete() else ""
+    )
     return (
         '<footer class="site"><div class="wrap">'
-        f"{links}<br>© {datetime.now(timezone.utc).year} {SITE_NAME}"
+        f"{links}<br>"
+        f"{legal + ' · ' if legal else ''}© {datetime.now(timezone.utc).year} {SITE_NAME}"
         "</div></footer>"
     )
 
@@ -565,7 +609,94 @@ def render_video(video: dict, root: str) -> str:
 {paragraphs(description)}
     </div>
   </div></main>
-{footer()}
+{footer("../../")}
+</body>
+</html>
+"""
+
+
+def render_imprint(root: str) -> str:
+    data = load_imprint()
+    canonical = f"{root}/impressum/" if root else ""
+
+    rows = [html.escape(str(data["operator"]).strip())]
+    rows += [
+        html.escape(str(line).strip())
+        for line in data.get("address", [])
+        if str(line).strip()
+    ]
+    for label, key in (("VAT / UID", "vat"), ("Commercial register", "register")):
+        if str(data.get(key, "")).strip():
+            rows.append(f"{label}: {html.escape(str(data[key]).strip())}")
+    block = "<br>\n      ".join(rows)
+
+    email = str(data.get("email", "")).strip()
+    contact = (
+        f'<p>Contact: <a href="mailto:{html.escape(email, quote=True)}">'
+        f"{html.escape(email)}</a></p>"
+        if email
+        else ""
+    )
+
+    ads = (
+        """
+    <h2>Advertising</h2>
+    <p>This site uses Google AdSense, a service of Google Ireland Limited. Google
+    and its partners may set cookies or read device identifiers to select and
+    measure ads. You can review and change your ad settings at
+    <a href="https://adssettings.google.com/" rel="nofollow noopener" target="_blank">adssettings.google.com</a>
+    and read how Google handles the data at
+    <a href="https://policies.google.com/technologies/partner-sites" rel="nofollow noopener" target="_blank">policies.google.com/technologies/partner-sites</a>.</p>
+"""
+        if ADSENSE_CLIENT
+        else ""
+    )
+
+    return f"""<!doctype html>
+<html lang="en">
+<head>
+{head(f"Imprint &amp; Privacy — {SITE_NAME}", f"Legal notice and privacy information for {SITE_NAME}.", canonical, "", "website")}
+</head>
+<body>
+  <header class="site"><div class="wrap">
+    <a class="brand" href="../">{SITE_NAME}</a>
+  </div></header>
+  <main class="video"><div class="wrap">
+    <a class="back" href="../">&larr; Back to the videos</a>
+    <h1>Imprint &amp; Privacy</h1>
+
+    <h2>Operator</h2>
+    <p>
+      {block}
+    </p>
+    {contact}
+
+    <h2>Content</h2>
+    <p>The videos on this site are produced by {SITE_NAME} and hosted on YouTube.
+    Every claim is checked against the cited primary sources, which are listed in
+    full on each video page. Should something turn out to be wrong, write to us
+    and it will be corrected.</p>
+
+    <h2>Hosting</h2>
+    <p>This site is served by GitHub Pages (GitHub, Inc.). GitHub records
+    connection data such as your IP address in its server logs to deliver the
+    pages and defend against abuse.</p>
+
+    <h2>Embedded videos</h2>
+    <p>Videos are embedded through <code>youtube-nocookie.com</code>, YouTube's
+    privacy-enhanced mode: no profiling cookie is set before you start playback.
+    Loading a page still contacts Google's servers, which receive your IP address,
+    and starting a video causes YouTube to store data on your device. YouTube is
+    operated by Google Ireland Limited; see
+    <a href="https://policies.google.com/privacy" rel="nofollow noopener" target="_blank">policies.google.com/privacy</a>.</p>
+{ads}
+    <h2>Your rights</h2>
+    <p>You can ask what personal data concerning you is processed and request its
+    correction or deletion. Use the contact address above.</p>
+
+    <p class="meta">Last updated: {datetime.now(timezone.utc).strftime("%d.%m.%Y")}</p>
+  </div></main>
+{footer("../")}
 </body>
 </html>
 """
@@ -573,6 +704,8 @@ def render_video(video: dict, root: str) -> str:
 
 def render_sitemap(videos: list[dict], root: str) -> str:
     urls = [f"{root}/"] + [f"{root}/v/{v['slug']}/" for v in videos]
+    if imprint_is_complete():
+        urls.append(f"{root}/impressum/")
     body = "\n".join(f"  <url><loc>{html.escape(u, quote=True)}</loc></url>" for u in urls)
     return (
         '<?xml version="1.0" encoding="UTF-8"?>\n'
@@ -611,6 +744,18 @@ def main() -> int:
         page = OUT / "v" / video["slug"]
         page.mkdir(parents=True, exist_ok=True)
         (page / "index.html").write_text(render_video(video, root), encoding="utf-8")
+
+    if imprint_is_complete():
+        page = OUT / "impressum"
+        page.mkdir(parents=True, exist_ok=True)
+        (page / "index.html").write_text(render_imprint(root), encoding="utf-8")
+    else:
+        print(
+            "warning: data/imprint.json is incomplete — no imprint page was built "
+            "and the footer link is omitted. Fill in 'operator' plus 'email' or "
+            "'address'.",
+            file=sys.stderr,
+        )
 
     (OUT / ".nojekyll").write_text("", encoding="utf-8")
 

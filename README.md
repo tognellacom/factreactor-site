@@ -109,3 +109,32 @@ falsch einsortiert. Die Themennamen folgen den YouTube-Playlists
 Die Filterleiste ist im HTML `hidden` und wird erst per JavaScript eingeblendet.
 Ohne JavaScript sieht man die vollständige, chronologische Liste statt toter
 Schaltflächen.
+
+## Impressum
+
+Die Angaben stehen in `data/imprint.json`. Die Seite `/impressum/` wird **nur
+gebaut und verlinkt**, wenn `operator` ausgefüllt ist und zusätzlich `email`
+oder `address` — sonst warnt der Build und lässt die Seite weg. Ein Impressum
+mit Lücken ist schlechter als keines.
+
+Die Seite enthält neben den Betreiberangaben kurze Abschnitte zu Hosting
+(GitHub Pages), zum YouTube-Embed und zu Google AdSense — alles drei
+Datenverarbeitungen, die durch die Bauweise der Seite entstehen.
+
+Alles in dieser Datei wird öffentlich und von Suchmaschinen indexiert.
+
+## Werbung
+
+`ADSENSE_CLIENT` in `scripts/build_site.py` hält die AdSense-Publisher-ID. Der
+Tag wird in den `<head>` **jeder** Seite geschrieben. Leerer String schaltet ihn
+überall ab.
+
+Zwei Dinge, die dieses Repo nicht erledigt:
+
+- **`ads.txt`** gehört ins Site-Root, sonst zahlt AdSense nicht voll aus. Wenn
+  du sie hast, als `ads.txt` ins Repo-Root legen und in `build_site.py` neben
+  der `CNAME` mit ins Artefakt kopieren.
+- **Einwilligung (EWR/UK/Schweiz).** Google verlangt für personalisierte Werbung
+  an EWR-Nutzer eine zertifizierte Consent-Management-Plattform. Die Seite hat
+  keine. Solange keine da ist, ist der Tag zwar eingebunden, aber die
+  Einwilligungspflicht nicht erfüllt.
