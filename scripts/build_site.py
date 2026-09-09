@@ -41,6 +41,27 @@ CHANNEL_URL = f"https://www.youtube.com/channel/{CHANNEL_ID}"
 
 # Google AdSense. Empty string disables the tag everywhere.
 ADSENSE_CLIENT = "ca-pub-5873583387305949"
+
+# Google Analytics 4 measurement id, e.g. "G-XXXXXXXXXX". Empty disables it.
+ANALYTICS_ID = ""
+
+# Google Consent Mode v2. Everything that could store or share data starts
+# DENIED and stays denied until a consent management platform grants it — the
+# consent message configured in AdSense under Privacy & messaging is what
+# updates this. Without the defaults below, the ad and analytics tags would
+# store data on first paint, before anyone is asked.
+CONSENT_DEFAULTS = """window.dataLayer=window.dataLayer||[];
+function gtag(){dataLayer.push(arguments);}
+gtag('consent','default',{
+ 'ad_storage':'denied',
+ 'ad_user_data':'denied',
+ 'ad_personalization':'denied',
+ 'analytics_storage':'denied',
+ 'functionality_storage':'granted',
+ 'security_storage':'granted',
+ 'wait_for_update':500
+});
+gtag('set','ads_data_redaction',true);"""
 SOCIAL = [
     ("YouTube", CHANNEL_URL),
     ("TikTok", "https://www.tiktok.com/@factreactor_hq"),
@@ -420,6 +441,21 @@ def head(title: str, description: str, canonical: str, image: str, og_type: str)
     if canonical:
         tags.append(f'<link rel="canonical" href="{html.escape(canonical, quote=True)}">')
         tags.append(f'<meta property="og:url" content="{html.escape(canonical, quote=True)}">')
+    # Order matters and is the whole point: the consent defaults must run
+    # synchronously before either Google tag loads, otherwise both start with
+    # consent granted and the defaults arrive too late to matter.
+    if ADSENSE_CLIENT or ANALYTICS_ID:
+        tags.append(f"<script>{CONSENT_DEFAULTS}</script>")
+
+    if ANALYTICS_ID:
+        gid = html.escape(ANALYTICS_ID, quote=True)
+        tags.append(
+            f'<script async src="https://www.googletagmanager.com/gtag/js?id={gid}"></script>'
+        )
+        tags.append(
+            f"<script>gtag('js',new Date());gtag('config','{gid}');</script>"
+        )
+
     if ADSENSE_CLIENT:
         tags.append(
             '<script async src="https://pagead2.googlesyndication.com/pagead/js/'
@@ -659,6 +695,31 @@ def render_imprint(root: str) -> str:
         else ""
     )
 
+    analytics = (
+        """
+    <h2>Analytics</h2>
+    <p>This site uses Google Analytics 4 to count visits and see which pages are
+    read. Measurement only starts once you have consented; until then no
+    analytics data is stored on your device. IP addresses are shortened by Google
+    before they are processed.</p>
+"""
+        if ANALYTICS_ID
+        else ""
+    )
+
+    consent = (
+        """
+    <h2>Consent</h2>
+    <p>Advertising and analytics are switched off by default. Nothing is stored
+    on your device and no identifiers are shared until you agree in the consent
+    dialogue, and Google's tags on this site are configured to honour that
+    default (Google Consent Mode). You can change or withdraw your decision at
+    any time through the privacy settings link in the consent dialogue.</p>
+"""
+        if ADSENSE_CLIENT or ANALYTICS_ID
+        else ""
+    )
+
     return f"""<!doctype html>
 <html lang="en">
 <head>
@@ -696,7 +757,7 @@ def render_imprint(root: str) -> str:
     and starting a video causes YouTube to store data on your device. YouTube is
     operated by Google Ireland Limited; see
     <a href="https://policies.google.com/privacy" rel="nofollow noopener" target="_blank">policies.google.com/privacy</a>.</p>
-{ads}
+{ads}{analytics}{consent}
     <h2>Your rights</h2>
     <p>You can ask what personal data concerning you is processed and request its
     correction or deletion. Use the contact address above.</p>
@@ -710,10 +771,23 @@ def render_imprint(root: str) -> str:
 
 
 def render_sitemap(videos: list[dict], root: str) -> str:
-    urls = [f"{root}/"] + [f"{root}/v/{v['slug']}/" for v in videos]
+    # (url, lastmod). The index carries the newest video's date, so it only
+    # changes when something is actually published; the imprint has no
+    # meaningful date and gets none rather than a build timestamp that would
+    # churn every hour.
+    newest = videos[0].get("published", "") if videos else ""
+    urls = [(f"{root}/", newest)]
+    urls += [(f"{root}/v/{v['slug']}/", v.get("published", "")) for v in videos]
     if imprint_is_complete():
-        urls.append(f"{root}/impressum/")
-    body = "\n".join(f"  <url><loc>{html.escape(u, quote=True)}</loc></url>" for u in urls)
+        urls.append((f"{root}/impressum/", ""))
+
+    rows = []
+    for url, lastmod in urls:
+        row = f"  <url><loc>{html.escape(url, quote=True)}</loc>"
+        if lastmod:
+            row += f"<lastmod>{html.escape(lastmod, quote=True)}</lastmod>"
+        rows.append(row + "</url>")
+    body = "\n".join(rows)
     return (
         '<?xml version="1.0" encoding="UTF-8"?>\n'
         '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n'

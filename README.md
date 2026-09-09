@@ -138,3 +138,29 @@ Zwei Dinge, die dieses Repo nicht erledigt:
   an EWR-Nutzer eine zertifizierte Consent-Management-Plattform. Die Seite hat
   keine. Solange keine da ist, ist der Tag zwar eingebunden, aber die
   Einwilligungspflicht nicht erfüllt.
+
+## Einwilligung, Werbung, Analytics
+
+Drei Konstanten in `scripts/build_site.py` steuern alles:
+
+| | |
+|---|---|
+| `ADSENSE_CLIENT` | AdSense-Publisher-ID |
+| `ANALYTICS_ID` | GA4-Mess-ID (`G-…`), leer = aus |
+| `CONSENT_DEFAULTS` | Google Consent Mode v2 |
+
+**Die Reihenfolge im `<head>` ist der Kern und darf nicht verdreht werden:**
+
+1. `CONSENT_DEFAULTS` — synchron, setzt `ad_storage`, `ad_user_data`,
+   `ad_personalization` und `analytics_storage` auf `denied`
+2. GA4-Tag
+3. AdSense-Tag
+
+Laufen die Google-Tags vor den Defaults, starten sie mit erteilter Einwilligung
+und die Defaults kommen zu spät. Deshalb steht der Block synchron und zuerst.
+
+**Die eigentliche Einwilligung holt AdSense ein**, nicht dieses Repo: die
+Einwilligungsmeldung wird im AdSense-Konto unter *Datenschutz und Meldungen*
+konfiguriert und aktualisiert zur Laufzeit den Consent-Zustand. Ohne diese
+Konfiguration bleibt alles auf `denied` — die Seite funktioniert, aber Werbung
+läuft unpersonalisiert und Analytics misst nichts.
