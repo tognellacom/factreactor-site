@@ -84,3 +84,28 @@ Keine Abhängigkeiten ausser der Python-Standardbibliothek.
 - **Titeländerungen ändern den Slug nicht.** Einmal vergebene URLs bleiben
   stabil, damit geteilte Links nicht brechen. Der angezeigte Titel wird bei jedem
   Lauf aus dem Feed aufgefrischt.
+
+## Themen
+
+Die Zuordnung steht in `data/topics.json` — Video-ID zu Thema:
+
+```json
+{
+  "TEipugAb-GE": "Anatomy",
+  "cbUPlcHJSFs": "Anatomy"
+}
+```
+
+Auf der Startseite entstehen daraus Filter-Schaltflächen mit Anzahl; im
+`VideoObject` landet das Thema als `genre`. Videos ohne Eintrag erscheinen unter
+„Alle", tragen aber kein Etikett — es geht nichts verloren, wenn die Zuordnung
+fehlt.
+
+Das ist der **einzige Handgriff pro Video**: eine Zeile nachtragen. Bewusst
+manuell, weil der Feed kein Thema liefert und Raten anhand von Stichwörtern
+falsch einsortiert. Die Themennamen folgen den YouTube-Playlists
+(History · Physics · Psychology · Anatomy).
+
+Die Filterleiste ist im HTML `hidden` und wird erst per JavaScript eingeblendet.
+Ohne JavaScript sieht man die vollständige, chronologische Liste statt toter
+Schaltflächen.

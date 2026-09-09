@@ -47,6 +47,7 @@ SOCIAL = [
 ROOT = Path(__file__).resolve().parent.parent
 OUT = ROOT / "_site"
 STATE_PATH = ROOT / "data" / "videos.json"
+TOPICS_PATH = ROOT / "data" / "topics.json"
 
 NS = {
     "atom": "http://www.w3.org/2005/Atom",
@@ -175,11 +176,28 @@ def save_state(state: dict) -> None:
     )
 
 
-def ordered(state: dict) -> list[dict]:
+def load_topics() -> dict:
+    """video_id -> topic. Hand-maintained; keys starting with _ are comments."""
+    if not TOPICS_PATH.exists():
+        return {}
+    try:
+        raw = json.loads(TOPICS_PATH.read_text(encoding="utf-8"))
+    except (json.JSONDecodeError, OSError) as exc:
+        print(f"warning: could not read {TOPICS_PATH}: {exc}", file=sys.stderr)
+        return {}
+    return {
+        k: str(v).strip()
+        for k, v in raw.items()
+        if not k.startswith("_") and str(v).strip()
+    }
+
+
+def ordered(state: dict, topics: dict) -> list[dict]:
     items = []
     for vid, rec in state["videos"].items():
         item = dict(rec)
         item["video_id"] = vid
+        item["topic"] = topics.get(vid, "")
         items.append(item)
     items.sort(key=lambda v: (v.get("published", ""), v["video_id"]), reverse=True)
     return items
@@ -273,9 +291,21 @@ header.site h1 { margin: 14px 0 8px; font-size: clamp(28px, 5vw, 42px); line-hei
 }
 .links a:hover { border-color: var(--gold); color: var(--gold); }
 
+.filters { display: flex; flex-wrap: wrap; gap: 9px; padding: 4px 0 26px; }
+.filters button {
+  font: inherit; font-size: 14px; cursor: pointer;
+  background: var(--surface); color: var(--muted);
+  border: 1px solid var(--line); border-radius: 999px; padding: 7px 15px;
+}
+.filters button:hover { color: var(--text); border-color: var(--muted); }
+.filters button[aria-pressed="true"] {
+  background: var(--gold); border-color: var(--gold); color: #14100a; font-weight: 700;
+}
+.filters .count { opacity: .65; font-weight: 400; }
+
 .grid {
-  display: grid; gap: 20px; padding: 8px 0 60px;
-  grid-template-columns: repeat(auto-fill, minmax(210px, 1fr));
+  display: grid; gap: 20px; padding: 0 0 60px;
+  grid-template-columns: repeat(auto-fill, minmax(172px, 1fr));
 }
 .card {
   background: var(--surface); border: 1px solid var(--line); border-radius: 14px;
@@ -283,11 +313,20 @@ header.site h1 { margin: 14px 0 8px; font-size: clamp(28px, 5vw, 42px); line-hei
   transition: border-color .15s ease, transform .15s ease;
 }
 .card:hover { border-color: var(--gold); transform: translateY(-2px); }
-/* height:auto is required — the width/height attributes on the <img> (kept to
-   reserve layout space) otherwise win over aspect-ratio and skew the crop. */
-.card img { width: 100%; height: auto; aspect-ratio: 16 / 9; object-fit: cover; display: block; background: #000; }
-.card .body { padding: 14px 16px 18px; }
-.card h2 { margin: 0 0 8px; font-size: 16px; line-height: 1.35; }
+.card[hidden] { display: none; }
+/* Shorts are 9:16. YouTube pillarboxes them into the 4:3 hqdefault, so a
+   centre crop back to 9:16 lands exactly on the original frame — no bars.
+   height:auto is required, or the <img> height attribute beats aspect-ratio. */
+.card .thumb { position: relative; }
+.card img { width: 100%; height: auto; aspect-ratio: 9 / 16; object-fit: cover; display: block; background: #000; }
+.card .topic {
+  position: absolute; left: 8px; bottom: 8px;
+  background: rgba(7, 7, 12, .82); border: 1px solid var(--line);
+  color: var(--cyan); font-size: 11px; letter-spacing: .08em; text-transform: uppercase;
+  padding: 3px 9px; border-radius: 999px; backdrop-filter: blur(4px);
+}
+.card .body { padding: 13px 15px 16px; }
+.card h2 { margin: 0 0 7px; font-size: 15px; line-height: 1.35; }
 .card time { color: var(--muted); font-size: 13px; }
 
 main.video { padding-bottom: 64px; }
@@ -354,11 +393,34 @@ def footer() -> str:
 # pages
 # --------------------------------------------------------------------------
 
+FILTER_JS = """
+(function () {
+  var bar = document.querySelector('.filters');
+  if (!bar) return;
+  bar.hidden = false;
+  bar.addEventListener('click', function (event) {
+    var button = event.target.closest('button');
+    if (!button) return;
+    var wanted = button.dataset.topic;
+    bar.querySelectorAll('button').forEach(function (b) {
+      b.setAttribute('aria-pressed', String(b === button));
+    });
+    document.querySelectorAll('.card').forEach(function (card) {
+      card.hidden = wanted !== '' && card.dataset.topic !== wanted;
+    });
+  });
+})();
+"""
+
+
 def render_index(videos: list[dict], root: str) -> str:
     if videos:
         cards = "\n".join(
-            f'''      <a class="card" href="v/{v["slug"]}/">
-        <img src="{html.escape(v["thumbnail"], quote=True)}" alt="" loading="lazy" width="480" height="270">
+            f'''      <a class="card" href="v/{v["slug"]}/" data-topic="{html.escape(v.get("topic", ""), quote=True)}">
+        <div class="thumb">
+          <img src="{html.escape(v["thumbnail"], quote=True)}" alt="" loading="lazy" width="480" height="854">
+          {f'<span class="topic">{html.escape(v["topic"])}</span>' if v.get("topic") else ''}
+        </div>
         <div class="body">
           <h2>{html.escape(v["title"])}</h2>
           <time datetime="{html.escape(v.get("published", ""), quote=True)}">{pretty_date(v.get("published", ""))}</time>
@@ -369,6 +431,28 @@ def render_index(videos: list[dict], root: str) -> str:
         listing = f'<div class="grid">\n{cards}\n    </div>'
     else:
         listing = '<p class="empty">Noch keine Videos erfasst.</p>'
+
+    # Topics, most-used first, then alphabetical. Hidden until JS confirms the
+    # filter works, so a no-JS visitor never sees dead buttons.
+    counts: dict[str, int] = {}
+    for v in videos:
+        if v.get("topic"):
+            counts[v["topic"]] = counts.get(v["topic"], 0) + 1
+    buttons = [
+        f'<button type="button" data-topic="" aria-pressed="true">Alle '
+        f'<span class="count">{len(videos)}</span></button>'
+    ]
+    for topic, count in sorted(counts.items(), key=lambda kv: (-kv[1], kv[0])):
+        buttons.append(
+            f'<button type="button" data-topic="{html.escape(topic, quote=True)}" '
+            f'aria-pressed="false">{html.escape(topic)} '
+            f'<span class="count">{count}</span></button>'
+        )
+    filters = (
+        '<div class="filters" hidden>\n      ' + "\n      ".join(buttons) + "\n    </div>"
+        if counts
+        else ""
+    )
 
     social = "\n".join(
         f'      <a href="{html.escape(url, quote=True)}" rel="noopener" target="_blank">{name}</a>'
@@ -403,9 +487,11 @@ def render_index(videos: list[dict], root: str) -> str:
     </div>
   </div></header>
   <main><div class="wrap">
+    {filters}
     {listing}
   </div></main>
 {footer()}
+<script>{FILTER_JS}</script>
 </body>
 </html>
 """
@@ -433,6 +519,8 @@ def render_video(video: dict, root: str) -> str:
         payload["url"] = canonical
     if video.get("duration"):  # ISO 8601, e.g. PT51S — only when known
         payload["duration"] = video["duration"]
+    if video.get("topic"):
+        payload["genre"] = video["topic"]
 
     return f"""<!doctype html>
 <html lang="en">
@@ -456,7 +544,7 @@ def render_video(video: dict, root: str) -> str:
               referrerpolicy="strict-origin-when-cross-origin"></iframe>
     </div>
     <h1>{html.escape(title)}</h1>
-    <p class="meta">Veröffentlicht am {pretty_date(video.get("published", ""))}</p>
+    <p class="meta">{f'{html.escape(video["topic"])} · ' if video.get("topic") else ''}Veröffentlicht am {pretty_date(video.get("published", ""))}</p>
     <a class="watch" href="{html.escape(watch, quote=True)}" rel="noopener" target="_blank">Auf YouTube ansehen</a>
     <div class="body-copy">
 {paragraphs(description)}
@@ -497,7 +585,7 @@ def main() -> int:
     state, added = merge(state, entries)
     save_state(state)
 
-    videos = ordered(state)
+    videos = ordered(state, load_topics())
 
     if OUT.exists():
         shutil.rmtree(OUT)
