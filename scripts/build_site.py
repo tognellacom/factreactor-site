@@ -846,6 +846,23 @@ def main() -> int:
     domain = custom_domain()
     if domain:
         (OUT / "CNAME").write_text(domain + "\n", encoding="utf-8")
+
+    # ads.txt has to be served from the site root or AdSense treats the
+    # inventory as unauthorised and pays out less. Like CNAME it only reaches
+    # the published site by riding along in the artifact.
+    ads_txt = ROOT / "ads.txt"
+    if ads_txt.exists():
+        content = ads_txt.read_text(encoding="utf-8")
+        (OUT / "ads.txt").write_text(content, encoding="utf-8")
+        # A mismatch here is silent and costs revenue, so fail loudly instead.
+        if ADSENSE_CLIENT:
+            publisher = ADSENSE_CLIENT.removeprefix("ca-")
+            if publisher not in content:
+                print(
+                    f"warning: ads.txt does not mention {publisher}, which is the "
+                    f"publisher id in ADSENSE_CLIENT ({ADSENSE_CLIENT})",
+                    file=sys.stderr,
+                )
     if root:
         (OUT / "sitemap.xml").write_text(render_sitemap(videos, root), encoding="utf-8")
         (OUT / "robots.txt").write_text(

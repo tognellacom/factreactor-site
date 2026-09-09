@@ -131,9 +131,11 @@ Tag wird in den `<head>` **jeder** Seite geschrieben. Leerer String schaltet ihn
 
 Zwei Dinge, die dieses Repo nicht erledigt:
 
-- **`ads.txt`** gehört ins Site-Root, sonst zahlt AdSense nicht voll aus. Wenn
-  du sie hast, als `ads.txt` ins Repo-Root legen und in `build_site.py` neben
-  der `CNAME` mit ins Artefakt kopieren.
+- **`ads.txt`** liegt im Repo-Root und wird wie die `CNAME` ins Artefakt
+  kopiert, damit sie unter `/ads.txt` ausgeliefert wird. Der Build vergleicht
+  die Publisher-ID darin mit `ADSENSE_CLIENT` und warnt bei Abweichung — ein
+  stiller Zahlendreher dort kostet Einnahmen, ohne dass irgendwo ein Fehler
+  auftaucht.
 - **Einwilligung (EWR/UK/Schweiz).** Google verlangt für personalisierte Werbung
   an EWR-Nutzer eine zertifizierte Consent-Management-Plattform. Die Seite hat
   keine. Solange keine da ist, ist der Tag zwar eingebunden, aber die
