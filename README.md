@@ -129,7 +129,7 @@ Alles in dieser Datei wird öffentlich und von Suchmaschinen indexiert.
 Tag wird in den `<head>` **jeder** Seite geschrieben. Leerer String schaltet ihn
 überall ab.
 
-Zwei Dinge, die dieses Repo nicht erledigt:
+Dazu zwei Punkte:
 
 - **`ads.txt`** liegt im Repo-Root und wird wie die `CNAME` ins Artefakt
   kopiert, damit sie unter `/ads.txt` ausgeliefert wird. Der Build vergleicht
