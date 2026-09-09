@@ -1,0 +1,65 @@
+name: Build and deploy site
+
+on:
+  schedule:
+    # Hourly. A run that finds no new video finishes in seconds, so a delayed
+    # or skipped run is caught by the next one.
+    - cron: "0 * * * *"
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write   # to commit data/videos.json
+  pages: write
+  id-token: write
+
+# Never let two deploys race; queue instead of cancelling so a run that
+# already committed the archive still reaches Pages.
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Build site
+        env:
+          # Set this to your custom domain once you have one, e.g.
+          # https://factreactor.com — otherwise the GitHub Pages URL is derived.
+          BASE_URL: ${{ vars.BASE_URL }}
+        run: python3 scripts/build_site.py
+
+      - name: Commit the archive if it changed
+        run: |
+          if [ -n "$(git status --porcelain data/videos.json)" ]; then
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git add data/videos.json
+            # [skip ci] stops this push from triggering the workflow again.
+            git commit -m "Update video archive [skip ci]"
+            git push
+          else
+            echo "Archive unchanged."
+          fi
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4
