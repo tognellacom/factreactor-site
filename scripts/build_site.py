@@ -43,7 +43,7 @@ CHANNEL_URL = f"https://www.youtube.com/channel/{CHANNEL_ID}"
 ADSENSE_CLIENT = "ca-pub-5873583387305949"
 
 # Google Analytics 4 measurement id, e.g. "G-XXXXXXXXXX". Empty disables it.
-ANALYTICS_ID = ""
+ANALYTICS_ID = "G-10JB28937H"
 
 # Google Consent Mode v2. Everything that could store or share data starts
 # DENIED and stays denied until a consent management platform grants it — the
