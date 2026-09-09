@@ -341,9 +341,11 @@ a:hover { color: var(--gold); }
 
 header.site { padding: 56px 0 34px; }
 .brand {
-  display: inline-block; font-size: 13px; letter-spacing: .22em;
+  display: inline-flex; align-items: center; gap: 11px;
+  font-size: 13px; letter-spacing: .22em;
   text-transform: uppercase; color: var(--gold); text-decoration: none; font-weight: 700;
 }
+.brand img { width: 44px; height: 44px; display: block; border-radius: 7px; }
 header.site h1 { margin: 14px 0 8px; font-size: clamp(28px, 5vw, 42px); line-height: 1.15; }
 .tagline { margin: 0; color: var(--muted); font-size: 18px; }
 .links { margin-top: 22px; display: flex; flex-wrap: wrap; gap: 10px; }
@@ -422,13 +424,24 @@ footer.site {
 """
 
 
-def head(title: str, description: str, canonical: str, image: str, og_type: str) -> str:
+def head(
+    title: str,
+    description: str,
+    canonical: str,
+    image: str,
+    og_type: str,
+    prefix: str = "",
+) -> str:
+    """prefix walks back up to the site root, so asset links resolve from any
+    depth and the site keeps working under a github.io project path too."""
     tags = [
         '<meta charset="utf-8">',
         '<meta name="viewport" content="width=device-width, initial-scale=1">',
         f"<title>{html.escape(title)}</title>",
         f'<meta name="description" content="{html.escape(description, quote=True)}">',
         '<meta name="theme-color" content="#07070c">',
+        f'<link rel="icon" type="image/png" sizes="32x32" href="{prefix}assets/icon-32.png">',
+        f'<link rel="apple-touch-icon" sizes="180x180" href="{prefix}assets/icon-180.png">',
         f'<meta property="og:title" content="{html.escape(title, quote=True)}">',
         f'<meta property="og:description" content="{html.escape(description, quote=True)}">',
         f'<meta property="og:type" content="{og_type}">',
@@ -567,14 +580,14 @@ def render_index(videos: list[dict], root: str) -> str:
     return f"""<!doctype html>
 <html lang="en">
 <head>
-{head(f"{SITE_NAME} — {SITE_TAGLINE}", SITE_DESCRIPTION, f"{root}/" if root else "", "", "website")}
+{head(f"{SITE_NAME} — {SITE_TAGLINE}", SITE_DESCRIPTION, f"{root}/" if root else "", f"{root}/assets/logo.png" if root else "", "website")}
 <script type="application/ld+json">
 {ld}
 </script>
 </head>
 <body>
   <header class="site"><div class="wrap">
-    <span class="brand">{SITE_NAME}</span>
+    <span class="brand"><img src="assets/icon-64.png" alt="" width="64" height="64">{SITE_NAME}</span>
     <h1>{html.escape(SITE_TAGLINE)}</h1>
     <p class="tagline">{html.escape(SITE_DESCRIPTION)}</p>
     <div class="links">
@@ -620,14 +633,14 @@ def render_video(video: dict, root: str) -> str:
     return f"""<!doctype html>
 <html lang="en">
 <head>
-{head(f"{title} — {SITE_NAME}", summary(description) or SITE_TAGLINE, canonical, video["thumbnail"], "video.other")}
+{head(f"{title} — {SITE_NAME}", summary(description) or SITE_TAGLINE, canonical, video["thumbnail"], "video.other", "../../")}
 <script type="application/ld+json">
 {json_ld(payload)}
 </script>
 </head>
 <body>
   <header class="site"><div class="wrap">
-    <a class="brand" href="../../">{SITE_NAME}</a>
+    <a class="brand" href="../../"><img src="../../assets/icon-64.png" alt="" width="64" height="64">{SITE_NAME}</a>
   </div></header>
   <main class="video"><div class="wrap">
     <a class="back" href="../../">&larr; Alle Videos</a>
@@ -723,11 +736,11 @@ def render_imprint(root: str) -> str:
     return f"""<!doctype html>
 <html lang="en">
 <head>
-{head(f"Imprint &amp; Privacy — {SITE_NAME}", f"Legal notice and privacy information for {SITE_NAME}.", canonical, "", "website")}
+{head(f"Imprint &amp; Privacy — {SITE_NAME}", f"Legal notice and privacy information for {SITE_NAME}.", canonical, f"{root}/assets/logo.png" if root else "", "website", "../")}
 </head>
 <body>
   <header class="site"><div class="wrap">
-    <a class="brand" href="../">{SITE_NAME}</a>
+    <a class="brand" href="../"><img src="../assets/icon-64.png" alt="" width="64" height="64">{SITE_NAME}</a>
   </div></header>
   <main class="video"><div class="wrap">
     <a class="back" href="../">&larr; Back to the videos</a>
@@ -837,6 +850,12 @@ def main() -> int:
             "'address'.",
             file=sys.stderr,
         )
+
+    assets = ROOT / "assets"
+    if assets.is_dir():
+        shutil.copytree(assets, OUT / "assets")
+    else:
+        print("warning: assets/ is missing — logo and favicon will 404", file=sys.stderr)
 
     (OUT / ".nojekyll").write_text("", encoding="utf-8")
 

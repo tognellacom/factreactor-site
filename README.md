@@ -166,3 +166,18 @@ Einwilligungsmeldung wird im AdSense-Konto unter *Datenschutz und Meldungen*
 konfiguriert und aktualisiert zur Laufzeit den Consent-Zustand. Ohne diese
 Konfiguration bleibt alles auf `denied` — die Seite funktioniert, aber Werbung
 läuft unpersonalisiert und Analytics misst nichts.
+
+## Logo und Favicon
+
+Das Original liegt nicht im Repo — nur abgeleitete Grössen in `assets/`:
+
+| Datei | Verwendung |
+|---|---|
+| `logo.png` (512) | og:image für Startseite und Impressum |
+| `icon-180.png` | Apple-Touch-Icon |
+| `icon-64.png` | Kopfzeile, dargestellt mit 44 px |
+| `icon-32.png` | Favicon |
+
+Der ganze Ordner wird ins Artefakt kopiert; fehlt er, warnt der Build, statt
+stumm 404er auszuliefern. Neues Logo: Originaldatei quadratisch bereithalten
+und die vier Grössen mit Pillow neu ableiten (LANCZOS, `optimize=True`).
