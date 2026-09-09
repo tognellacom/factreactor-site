@@ -630,6 +630,13 @@ def render_imprint(root: str) -> str:
             rows.append(f"{label}: {html.escape(str(data[key]).strip())}")
     block = "<br>\n      ".join(rows)
 
+    responsible = str(data.get("responsible", "")).strip()
+    if responsible:
+        block += (
+            "<br>\n      <br>\n      Responsible for the content: "
+            + html.escape(responsible)
+        )
+
     email = str(data.get("email", "")).strip()
     contact = (
         f'<p>Contact: <a href="mailto:{html.escape(email, quote=True)}">'
