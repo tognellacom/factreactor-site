@@ -1,0 +1,8 @@
+{
+  "_comment": "YouTube-Playlist-ID zu Thema. Das ist die EINZIGE Themenpflege, die es noch gibt, und sie fällt nur an, wenn eine neue Playlist entsteht. Pro Video ist nichts mehr zu tun: der Build liest die Playlist-Feeds und schreibt data/topics.json selbst. Die ID steht in der Playlist-URL hinter 'list='. Die Reihenfolge hier entscheidet: liegt ein Video in zwei Playlists, gewinnt die obere. Die Playlist muss öffentlich oder nicht gelistet sein - eine private liefert keinen Feed.",
+  "PLCft2cwukECA": "Physics",
+  "PLUVKjJuzMJyg": "Anatomy",
+  "PLJ3a9KpYdi28": "Psychology",
+  "PLQmingYNVBpQ": "Chemistry",
+  "PLeiVsWDFkpJo": "History"
+}

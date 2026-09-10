@@ -39,10 +39,12 @@ jobs:
 
       - name: Commit the archive if it changed
         run: |
-          if [ -n "$(git status --porcelain data/videos.json)" ]; then
+          # Both files are archives the build writes: videos.json from the
+          # channel feed, topics.json from the playlist feeds.
+          if [ -n "$(git status --porcelain data/videos.json data/topics.json)" ]; then
             git config user.name "github-actions[bot]"
             git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-            git add data/videos.json
+            git add data/videos.json data/topics.json
             # [skip ci] stops this push from triggering the workflow again.
             git commit -m "Update video archive [skip ci]"
             git push

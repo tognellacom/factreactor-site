@@ -12,8 +12,10 @@ YouTube publiziert
         ↓
 GitHub Actions (stündlich)
    liest den öffentlichen Kanal-Feed
+   und die Playlist-Feeds
         ↓
    data/videos.json  ← Archiv, wächst, verliert nie etwas
+   data/topics.json  ← Thema je Video, aus den Playlists
         ↓
    _site/  →  Pages-Artefakt  →  Deploy
 ```
@@ -70,6 +72,15 @@ Ohne Netzzugang gegen eine gespeicherte Feed-Datei:
 FEED_FILE=feed.xml GITHUB_REPOSITORY=owner/repo python3 scripts/build_site.py
 ```
 
+Ohne `PLAYLIST_FEED_DIR` überspringt der Lauf die Playlist-Feeds und lässt die
+Themen, wie sie sind. Mit gespeicherten Playlist-Feeds — eine Datei
+`<playlist-id>.xml` je Playlist im Ordner:
+
+```bash
+FEED_FILE=feed.xml PLAYLIST_FEED_DIR=plfeeds GITHUB_REPOSITORY=owner/repo \
+  python3 scripts/build_site.py
+```
+
 Keine Abhängigkeiten ausser der Python-Standardbibliothek.
 
 ## Bekannte Grenzen
@@ -87,24 +98,46 @@ Keine Abhängigkeiten ausser der Python-Standardbibliothek.
 
 ## Themen
 
-Die Zuordnung steht in `data/topics.json` — Video-ID zu Thema:
+Die Zuordnung Video → Thema entsteht **automatisch aus den YouTube-Playlists**.
+Jeder Short wird beim Veröffentlichen ohnehin in die Playlist seines Feldes
+gelegt; genau diese Zuordnung liest der Build. Von Hand ist pro Video nichts
+mehr nachzutragen.
+
+```
+data/playlists.json      Playlist-ID → Thema   ← der einzige Handgriff,
+        ↓                                        und nur bei neuer Playlist
+Playlist-Feeds (Atom, öffentlich)
+        ↓
+data/topics.json         Video-ID → Thema      ← schreibt der Build, wird
+                                                 committet wie videos.json
+```
+
+`data/playlists.json` hält fünf Zeilen — die Playlist-ID (der Teil hinter
+`list=` in der Playlist-URL) und den Themennamen:
 
 ```json
 {
-  "TEipugAb-GE": "Anatomy",
-  "cbUPlcHJSFs": "Anatomy"
+  "PLCft2cwukECA": "Physics",
+  "PLUVKjJuzMJyg": "Anatomy"
 }
 ```
 
-Auf der Startseite entstehen daraus Filter-Schaltflächen mit Anzahl; im
+Die Reihenfolge entscheidet: liegt ein Video in zwei Playlists, gewinnt die
+obere, und der Build sagt es im Log. Die Playlist muss öffentlich oder nicht
+gelistet sein — eine private liefert keinen Feed.
+
+Auf der Startseite entstehen aus den Themen Filter-Schaltflächen mit Anzahl; im
 `VideoObject` landet das Thema als `genre`. Videos ohne Eintrag erscheinen unter
 „Alle", tragen aber kein Etikett — es geht nichts verloren, wenn die Zuordnung
-fehlt.
+fehlt. Die Themennamen folgen den YouTube-Playlists (History · Physics ·
+Psychology · Anatomy · Chemistry).
 
-Das ist der **einzige Handgriff pro Video**: eine Zeile nachtragen. Bewusst
-manuell, weil der Feed kein Thema liefert und Raten anhand von Stichwörtern
-falsch einsortiert. Die Themennamen folgen den YouTube-Playlists
-(History · Physics · Psychology · Anatomy).
+**Playlist-Feeds liefern wie der Kanal-Feed nur die neuesten 15 Einträge**,
+deshalb ist `data/topics.json` genau wie `data/videos.json` ein Archiv: einmal
+Geschriebenes wird nie gelöscht. Ein von Hand eingetragenes Thema für ein Video,
+das in keiner Playlist liegt, bleibt also stehen. Und ist eine Playlist gerade
+nicht lesbar, warnt der Build und behält, was schon dasteht — ein Netzfehler
+darf keine Themen verlieren.
 
 Die Filterleiste ist im HTML `hidden` und wird erst per JavaScript eingeblendet.
 Ohne JavaScript sieht man die vollständige, chronologische Liste statt toter

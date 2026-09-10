@@ -2,8 +2,9 @@
 """Build the FactReactor site from the public YouTube channel feed.
 
 Reads the channel's Atom feed, merges it into data/videos.json (the feed only
-ever carries the newest 15 entries, so the archive has to persist here), and
-renders a static site into _site/.
+ever carries the newest 15 entries, so the archive has to persist here), reads
+one Atom feed per YouTube playlist to learn each video's topic, and renders a
+static site into _site/.
 
 Standard library only, no dependencies.
 
@@ -12,6 +13,9 @@ Environment:
   BASE_URL    Absolute site root, e.g. https://factreactor.com. Falls back to
               the GitHub Pages URL derived from GITHUB_REPOSITORY.
   FEED_FILE   Read the feed from this file instead of the network (for tests).
+  PLAYLIST_FEED_DIR
+              Read the playlist feeds from <dir>/<playlist_id>.xml instead of
+              the network (for tests).
 """
 
 from __future__ import annotations
@@ -29,6 +33,7 @@ from pathlib import Path
 
 CHANNEL_ID = os.environ.get("CHANNEL_ID", "UCnWVqsL-mppKqIWIJypERiQ")
 FEED_URL = f"https://www.youtube.com/feeds/videos.xml?channel_id={CHANNEL_ID}"
+PLAYLIST_FEED_URL = "https://www.youtube.com/feeds/videos.xml?playlist_id={}"
 
 SITE_NAME = "FactReactor"
 SITE_TAGLINE = "One genuine aha moment in under a minute."
@@ -73,6 +78,7 @@ ROOT = Path(__file__).resolve().parent.parent
 OUT = ROOT / "_site"
 STATE_PATH = ROOT / "data" / "videos.json"
 TOPICS_PATH = ROOT / "data" / "topics.json"
+PLAYLISTS_PATH = ROOT / "data" / "playlists.json"
 IMPRINT_PATH = ROOT / "data" / "imprint.json"
 
 NS = {
@@ -157,6 +163,133 @@ def parse_feed(raw: str) -> list[dict]:
 
 
 # --------------------------------------------------------------------------
+# topics, read off the playlists
+# --------------------------------------------------------------------------
+#
+# The channel sorts every Short into a YouTube playlist named after its field,
+# and that assignment is made at publishing time, on YouTube, by the person who
+# publishes. So the topic already exists in a place this build can read - which
+# is why nothing here guesses from keywords and why nobody has to copy a line
+# into data/topics.json per video any more.
+#
+# Playlist feeds carry the newest 15 entries, exactly like the channel feed, so
+# the same rule applies: the feed is only the supplier, data/topics.json is the
+# archive, and an entry once written is never removed by this build.
+
+
+def load_playlists() -> list[tuple[str, str]]:
+    """(playlist_id, topic) in file order; earlier entries win a conflict."""
+    if not PLAYLISTS_PATH.exists():
+        return []
+    try:
+        raw = json.loads(PLAYLISTS_PATH.read_text(encoding="utf-8"))
+    except (json.JSONDecodeError, OSError) as exc:
+        print(f"warning: could not read {PLAYLISTS_PATH}: {exc}", file=sys.stderr)
+        return []
+    return [
+        (k, str(v).strip())
+        for k, v in raw.items()
+        if not k.startswith("_") and str(v).strip()
+    ]
+
+
+def fetch_playlist(playlist_id: str) -> str:
+    override = os.environ.get("PLAYLIST_FEED_DIR")
+    if override:
+        path = Path(override) / f"{playlist_id}.xml"
+        return path.read_text(encoding="utf-8") if path.exists() else ""
+    req = urllib.request.Request(
+        PLAYLIST_FEED_URL.format(playlist_id),
+        headers={"User-Agent": "factreactor-site-builder/1.0"},
+    )
+    with urllib.request.urlopen(req, timeout=30) as resp:
+        return resp.read().decode("utf-8")
+
+
+def discover_topics() -> dict:
+    """video_id -> topic, read off the public playlist feeds.
+
+    Every failure here is survivable on purpose: a playlist that cannot be read
+    is reported and skipped, and what data/topics.json already holds stays put.
+    A build must never drop a topic because YouTube was briefly unreachable.
+    """
+    found: dict[str, str] = {}
+    for playlist_id, topic in load_playlists():
+        try:
+            raw = fetch_playlist(playlist_id)
+        except Exception as exc:
+            print(
+                f"warning: playlist {topic} ({playlist_id}) could not be read: "
+                f"{exc} - existing assignments are kept",
+                file=sys.stderr,
+            )
+            continue
+
+        try:
+            ids = [e["video_id"] for e in parse_feed(raw)] if raw.strip() else []
+        except ET.ParseError as exc:
+            print(
+                f"warning: playlist {topic} ({playlist_id}) returned no usable "
+                f"feed: {exc}",
+                file=sys.stderr,
+            )
+            continue
+
+        if not ids:
+            # The two ways this happens are worth naming, because both are
+            # silent otherwise: a wrong id (the part after 'list=' in the
+            # playlist URL) and a playlist set to private.
+            print(
+                f"warning: playlist {topic} ({playlist_id}) returned no videos - "
+                "check the id against the 'list=' part of the playlist URL, and "
+                "that the playlist is public or unlisted rather than private",
+                file=sys.stderr,
+            )
+            continue
+
+        for vid in ids:
+            if vid in found:
+                if found[vid] != topic:
+                    print(
+                        f"warning: {vid} is in both {found[vid]} and {topic} - "
+                        f"keeping {found[vid]}, which stands first in "
+                        f"{PLAYLISTS_PATH.name}",
+                        file=sys.stderr,
+                    )
+                continue
+            found[vid] = topic
+    return found
+
+
+def sync_topics(discovered: dict) -> int:
+    """Fold the playlist reading into data/topics.json, in place.
+
+    Returns how many assignments changed. Comment keys and any hand-written
+    entry for a video that is in no playlist survive untouched.
+    """
+    raw: dict = {}
+    if TOPICS_PATH.exists():
+        try:
+            raw = json.loads(TOPICS_PATH.read_text(encoding="utf-8"))
+        except (json.JSONDecodeError, OSError) as exc:
+            print(f"warning: could not read {TOPICS_PATH}: {exc}", file=sys.stderr)
+            return 0
+
+    changed = 0
+    for vid, topic in discovered.items():
+        if raw.get(vid) != topic:
+            raw[vid] = topic
+            changed += 1
+
+    if changed:
+        TOPICS_PATH.parent.mkdir(parents=True, exist_ok=True)
+        TOPICS_PATH.write_text(
+            json.dumps(raw, indent=2, ensure_ascii=False) + "\n", encoding="utf-8"
+        )
+    return changed
+
+
+# --------------------------------------------------------------------------
 # state
 # --------------------------------------------------------------------------
 
@@ -218,7 +351,7 @@ def save_state(state: dict) -> None:
 
 
 def load_topics() -> dict:
-    """video_id -> topic. Hand-maintained; keys starting with _ are comments."""
+    """video_id -> topic. Written by sync_topics(); _ keys are comments."""
     if not TOPICS_PATH.exists():
         return {}
     try:
@@ -827,6 +960,15 @@ def main() -> int:
     state, added = merge(state, entries)
     save_state(state)
 
+    # Topics come from the playlists, not from a hand-kept list. Skipped only
+    # in the offline test mode, where there is no network to read them from.
+    if os.environ.get("FEED_FILE") and not os.environ.get("PLAYLIST_FEED_DIR"):
+        retagged = 0
+        print("offline mode: playlist feeds not read, topics left as they are",
+              file=sys.stderr)
+    else:
+        retagged = sync_topics(discover_topics())
+
     videos = ordered(state, load_topics())
 
     if OUT.exists():
@@ -888,7 +1030,11 @@ def main() -> int:
             f"User-agent: *\nAllow: /\nSitemap: {root}/sitemap.xml\n", encoding="utf-8"
         )
 
-    print(f"{len(videos)} Videos, {added} neu · Basis-URL: {root or '(nicht gesetzt)'}")
+    tagged = sum(1 for v in videos if v["topic"])
+    print(
+        f"{len(videos)} Videos, {added} neu · {tagged} mit Thema, {retagged} "
+        f"neu zugeordnet · Basis-URL: {root or '(nicht gesetzt)'}"
+    )
     return 0
 
 
