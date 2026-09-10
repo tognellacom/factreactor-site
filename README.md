@@ -137,9 +137,9 @@ Dazu zwei Punkte:
   stiller Zahlendreher dort kostet Einnahmen, ohne dass irgendwo ein Fehler
   auftaucht.
 - **Einwilligung (EWR/UK/Schweiz).** Google verlangt für personalisierte Werbung
-  an EWR-Nutzer eine zertifizierte Consent-Management-Plattform. Die Seite hat
-  keine. Solange keine da ist, ist der Tag zwar eingebunden, aber die
-  Einwilligungspflicht nicht erfüllt.
+  an EWR-Nutzer eine zertifizierte Consent-Management-Plattform. Diese Rolle
+  übernimmt die DSGVO-Meldung im AdSense-Konto, veröffentlicht am 10.09.2026.
+  Details im Abschnitt unten.
 
 ## Einwilligung, Werbung, Analytics
 
@@ -163,9 +163,10 @@ und die Defaults kommen zu spät. Deshalb steht der Block synchron und zuerst.
 
 **Die eigentliche Einwilligung holt AdSense ein**, nicht dieses Repo: die
 Einwilligungsmeldung wird im AdSense-Konto unter *Datenschutz und Meldungen*
-konfiguriert und aktualisiert zur Laufzeit den Consent-Zustand. Ohne diese
-Konfiguration bleibt alles auf `denied` — die Seite funktioniert, aber Werbung
-läuft unpersonalisiert und Analytics misst nichts.
+konfiguriert und aktualisiert zur Laufzeit den Consent-Zustand. Ist sie nicht
+veröffentlicht, bleibt alles auf `denied` — die Seite funktioniert, aber Werbung
+läuft unpersonalisiert und Analytics misst nichts. Seit dem 10.09.2026 ist sie
+veröffentlicht.
 
 ## Logo und Favicon
 
