@@ -215,3 +215,16 @@ Das Original liegt nicht im Repo — nur abgeleitete Grössen in `assets/`:
 Der ganze Ordner wird ins Artefakt kopiert; fehlt er, warnt der Build, statt
 stumm 404er auszuliefern. Neues Logo: Originaldatei quadratisch bereithalten
 und die vier Grössen mit Pillow neu ableiten (LANCZOS, `optimize=True`).
+
+## Arbeitsweise und Korrekturen
+
+Zwei Textseiten ergänzen die Videoseiten: `/how-we-work/` (Quellenprinzip,
+Umgang mit Korrekturen, KI-Deklaration) und `/corrections/`. Beide stehen im
+Footer und in der Sitemap.
+
+`data/corrections.json` hält pro Video-ID den angepinnten YouTube-Kommentar.
+Der Build zeigt ihn auf der Videoseite als „Clarification" und sammelt alle auf
+`/corrections/`. **Das ist Handpflege** — der Feed liefert keine Kommentare.
+Beim Packaging schreibt der Editor die Zeile ins Package; eingetragen wird sie
+hier, sobald das Video live ist. Ein Video ohne Eintrag bekommt einfach keinen
+Abschnitt.

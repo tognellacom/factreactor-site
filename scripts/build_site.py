@@ -72,6 +72,7 @@ SOCIAL = [
     ("TikTok", "https://www.tiktok.com/@factreactor_hq"),
     ("Instagram", "https://www.instagram.com/factreactor_hq"),
     ("Facebook", "https://www.facebook.com/1375562482297804"),
+    ("X", "https://x.com/FactReactor_hq"),
 ]
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -80,6 +81,7 @@ STATE_PATH = ROOT / "data" / "videos.json"
 TOPICS_PATH = ROOT / "data" / "topics.json"
 PLAYLISTS_PATH = ROOT / "data" / "playlists.json"
 IMPRINT_PATH = ROOT / "data" / "imprint.json"
+CORRECTIONS_PATH = ROOT / "data" / "corrections.json"
 
 NS = {
     "atom": "http://www.w3.org/2005/Atom",
@@ -366,6 +368,23 @@ def load_topics() -> dict:
     }
 
 
+def load_corrections() -> dict:
+    """video_id -> clarification text, the video's pinned comment. Hand-kept
+    (the feed does not carry comments); _ keys are comments."""
+    if not CORRECTIONS_PATH.exists():
+        return {}
+    try:
+        raw = json.loads(CORRECTIONS_PATH.read_text(encoding="utf-8"))
+    except (json.JSONDecodeError, OSError) as exc:
+        print(f"warning: could not read {CORRECTIONS_PATH}: {exc}", file=sys.stderr)
+        return {}
+    return {
+        k: str(v).strip()
+        for k, v in raw.items()
+        if not k.startswith("_") and str(v).strip()
+    }
+
+
 def load_imprint() -> dict:
     if not IMPRINT_PATH.exists():
         return {}
@@ -554,6 +573,12 @@ footer.site {
   color: var(--muted); font-size: 14px;
 }
 .empty { color: var(--muted); padding: 30px 0 70px; }
+blockquote.note {
+  margin: 0 0 10px; padding: 14px 18px; border-left: 3px solid var(--gold);
+  background: var(--surface); border-radius: 0 10px 10px 0; overflow-wrap: anywhere;
+}
+main.video h2 a { color: var(--text); text-decoration: none; }
+main.video h2 a:hover { color: var(--gold); }
 """
 
 
@@ -622,9 +647,14 @@ def footer(prefix: str = "") -> str:
     legal = (
         f'<a href="{prefix}impressum/">Impressum</a>' if imprint_is_complete() else ""
     )
+    pages = (
+        f'<a href="{prefix}how-we-work/">How we work</a> · '
+        f'<a href="{prefix}corrections/">Corrections</a>'
+    )
     return (
         '<footer class="site"><div class="wrap">'
         f"{links}<br>"
+        f"{pages} · "
         f"{legal + ' · ' if legal else ''}© {datetime.now(timezone.utc).year} {SITE_NAME}"
         "</div></footer>"
     )
@@ -671,7 +701,7 @@ def render_index(videos: list[dict], root: str) -> str:
         )
         listing = f'<div class="grid">\n{cards}\n    </div>'
     else:
-        listing = '<p class="empty">Noch keine Videos erfasst.</p>'
+        listing = '<p class="empty">No videos yet.</p>'
 
     # Topics, most-used first, then alphabetical. Hidden until JS confirms the
     # filter works, so a no-JS visitor never sees dead buttons.
@@ -680,7 +710,7 @@ def render_index(videos: list[dict], root: str) -> str:
         if v.get("topic"):
             counts[v["topic"]] = counts.get(v["topic"], 0) + 1
     buttons = [
-        f'<button type="button" data-topic="" aria-pressed="true">Alle '
+        f'<button type="button" data-topic="" aria-pressed="true">All '
         f'<span class="count">{len(videos)}</span></button>'
     ]
     for topic, count in sorted(counts.items(), key=lambda kv: (-kv[1], kv[0])):
@@ -776,7 +806,7 @@ def render_video(video: dict, root: str) -> str:
     <a class="brand" href="../../"><img src="../../assets/icon-64.png" alt="" width="64" height="64">{SITE_NAME}</a>
   </div></header>
   <main class="video"><div class="wrap">
-    <a class="back" href="../../">&larr; Alle Videos</a>
+    <a class="back" href="../../">&larr; All videos</a>
     <div class="player">
       <iframe src="https://www.youtube-nocookie.com/embed/{html.escape(vid, quote=True)}"
               title="{html.escape(title, quote=True)}"
@@ -785,16 +815,99 @@ def render_video(video: dict, root: str) -> str:
               referrerpolicy="strict-origin-when-cross-origin"></iframe>
     </div>
     <h1>{html.escape(title)}</h1>
-    <p class="meta">{f'{html.escape(video["topic"])} · ' if video.get("topic") else ''}Veröffentlicht am {pretty_date(video.get("published", ""))}</p>
-    <a class="watch" href="{html.escape(watch, quote=True)}" rel="noopener" target="_blank">Auf YouTube ansehen</a>
+    <p class="meta">{f'{html.escape(video["topic"])} · ' if video.get("topic") else ''}Published {pretty_date(video.get("published", ""))}</p>
+    <a class="watch" href="{html.escape(watch, quote=True)}" rel="noopener" target="_blank">Watch on YouTube</a>
     <div class="body-copy">
 {paragraphs(description)}
     </div>
+{f'''    <h2>Clarification</h2>
+    <blockquote class="note">{linkify(video["correction"])}</blockquote>
+    <p class="meta">Also pinned under the video. All clarifications: <a href="../../corrections/">Corrections</a>.</p>''' if video.get("correction") else ""}
   </div></main>
 {footer("../../")}
 </body>
 </html>
 """
+
+
+def simple_page(slug: str, title: str, description: str, body: str, root: str) -> str:
+    """A text page one level below the root, in the imprint's layout."""
+    canonical = f"{root}/{slug}/" if root else ""
+    return f"""<!doctype html>
+<html lang="en">
+<head>
+{head(f"{title} — {SITE_NAME}", description, canonical, f"{root}/assets/logo.png" if root else "", "website", "../")}
+</head>
+<body>
+  <header class="site"><div class="wrap">
+    <a class="brand" href="../"><img src="../assets/icon-64.png" alt="" width="64" height="64">{SITE_NAME}</a>
+  </div></header>
+  <main class="video"><div class="wrap">
+    <a class="back" href="../">&larr; Back to the videos</a>
+    <h1>{html.escape(title)}</h1>
+{body}
+  </div></main>
+{footer("../")}
+</body>
+</html>
+"""
+
+
+def render_method(root: str) -> str:
+    body = """    <p>FactReactor makes one-minute Shorts about the things your own body and your
+    own senses have been getting wrong your whole life, and the physics behind them.</p>
+
+    <h2>A named source first</h2>
+    <p>Each topic starts from a study, a textbook or a measured constant. If a claim
+    can't be traced to one, it doesn't go in.</p>
+
+    <h2>Ranges, not drama</h2>
+    <p>Numbers that are genuinely contested are given as ranges, not rounded up into
+    something more impressive.</p>
+
+    <h2>Sources are public</h2>
+    <p>They are listed in every YouTube description and on each video's page here.</p>
+
+    <h2>Corrections stay visible</h2>
+    <p>When a video simplifies something or gets it wrong, the clarification goes in
+    the pinned comment under the video and on the
+    <a href="../corrections/">corrections page</a>.</p>
+
+    <h2>Who does what</h2>
+    <p>Every topic and its sources are checked and approved by a person before
+    production. Narration and visuals are AI-generated, and every upload is
+    labelled as altered or synthetic content.</p>
+
+    <p>Found a better source, or an error? Say so in the comments under the video,
+    or write to the address in the <a href="../impressum/">imprint</a>.</p>"""
+    return simple_page(
+        "how-we-work",
+        "How we work",
+        f"How {SITE_NAME} videos are researched, sourced and corrected.",
+        body,
+        root,
+    )
+
+
+def render_corrections(videos: list[dict], root: str) -> str:
+    items = "\n".join(
+        f'''    <h2><a href="../v/{v["slug"]}/">{html.escape(v["title"])}</a></h2>
+    <p class="meta">{pretty_date(v.get("published", ""))}</p>
+    <blockquote class="note">{linkify(v["correction"])}</blockquote>'''
+        for v in videos
+        if v.get("correction")
+    )
+    body = f"""    <p>A one-minute video has to leave things out. This is what each one simplified
+    or had no room for, and where the popular version of a topic gets it wrong,
+    newest first. Each one is also the pinned comment under its video.</p>
+{items or '    <p class="empty">Nothing here yet.</p>'}"""
+    return simple_page(
+        "corrections",
+        "Corrections and clarifications",
+        f"What {SITE_NAME} videos simplified, left out or had to clarify.",
+        body,
+        root,
+    )
 
 
 def render_imprint(root: str) -> str:
@@ -924,6 +1037,7 @@ def render_sitemap(videos: list[dict], root: str) -> str:
     newest = videos[0].get("published", "") if videos else ""
     urls = [(f"{root}/", newest)]
     urls += [(f"{root}/v/{v['slug']}/", v.get("published", "")) for v in videos]
+    urls += [(f"{root}/how-we-work/", ""), (f"{root}/corrections/", "")]
     if imprint_is_complete():
         urls.append((f"{root}/impressum/", ""))
 
@@ -970,6 +1084,10 @@ def main() -> int:
         retagged = sync_topics(discover_topics())
 
     videos = ordered(state, load_topics())
+    corrections = load_corrections()
+    for video in videos:
+        if video["video_id"] in corrections:
+            video["correction"] = corrections[video["video_id"]]
 
     if OUT.exists():
         shutil.rmtree(OUT)
@@ -980,6 +1098,14 @@ def main() -> int:
         page = OUT / "v" / video["slug"]
         page.mkdir(parents=True, exist_ok=True)
         (page / "index.html").write_text(render_video(video, root), encoding="utf-8")
+
+    for slug, rendered in (
+        ("how-we-work", render_method(root)),
+        ("corrections", render_corrections(videos, root)),
+    ):
+        page = OUT / slug
+        page.mkdir(parents=True, exist_ok=True)
+        (page / "index.html").write_text(rendered, encoding="utf-8")
 
     if imprint_is_complete():
         page = OUT / "impressum"
